@@ -1,0 +1,28 @@
+{
+  "name": "jishaku-torrent-storage",
+  "version": "0.0.0",
+  "description": "Torrent storage component of Jishaku Toshokan",
+  "author": "Conrad Pankoff <deoxxa@fknsrs.biz> (http://www.fknsrs.biz/)",
+  "license": "BSD",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/deoxxa/jishaku-torrent-storage.git"
+  },
+  "keywords": [
+    "torrent",
+    "storage",
+    "service",
+    "jishaku",
+    "toshokan"
+  ],
+  "dependencies": {
+    "nconf": "~0.6.4",
+    "express": "~3.0.0rc3",
+    "mongoskin": "~0.4.1",
+    "seaport": "~0.8.0",
+    "nt": "~0.3.0",
+    "winston": "~0.6.2",
+    "connect-winston": "~0.0.1",
+    "optimist": "~0.3.4"
+  }
+}

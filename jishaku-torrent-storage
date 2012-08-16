@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+
+var connect_winston = require("connect-winston"),
+    express = require("express"),
+    http = require("http"),
+    mongo = require("mongoskin"),
+    nconf = require("nconf"),
+    nt = require("nt"),
+    optimist = require("optimist"),
+    seaport = require("seaport"),
+    winston = require("winston");
+
+// package.json has `name` and `version` for seaport
+
+var package = require("./package.json");
+
+// nconf configuration
+
+nconf.argv().env();
+optimist.argv._.reverse().concat([__dirname + "/config.json"]).forEach(function(file) { nconf.file(file.toLowerCase().replace(/[^a-z0-9]+/g, "_"), file); });
+nconf.defaults({
+  seaport: {
+    port: 9999,
+  },
+  mongo: {
+    host: "localhost",
+    db: "torrents",
+  },
+  winston: {
+    console: {
+      colorize: true,
+      timestamp: true,
+    },
+  },
+});
+
+// seaport connection
+
+var ports = seaport.connect(nconf.get("seaport:host"), nconf.get("seaport:port"), nconf.get("seaport:config"));
+
+// winston configuration
+
+winston.remove(winston.transports.Console);
+
+if (!!nconf.get("winston:loggly")) {
+  winston.add(require("winston-loggly").Loggly, nconf.get("winston:loggly"));
+}
+
+if (!!nconf.get("winston:console")) {
+  winston.add(winston.transports.Console, nconf.get("winston:console"));
+}
+
+// get handle to database
+
+var db = mongo.db([nconf.get("mongo:host"), nconf.get("mongo:db")].join("/"));
+
+// set up express app
+
+var app = express();
+
+app.configure(function() {
+  // log requests with winston
+  app.use(connect_winston(winston));
+});
+
+// http server
+
+var server = http.createServer(app);
+
+// upload
+
+app.post("/", function(req, res, next) {
+  if (!req.is("application/x-bittorrent")) {
+    res.status(406);
+    return next(Error("invalid content type (should be application/x-bittorrent)"));
+  }
+
+  nt.read(req, function(err, torrent) {
+    if (err) {
+      res.status(406);
+      return next(err);
+    }
+
+    db.gridfs().open(torrent.infoHash(), "w", function(err, gs) {
+      if (err) {
+        res.status(500);
+        return next(err);
+      }
+
+      if (gs.length) {
+        return gs.close(function() {
+          return res.redirect(204, "/" + torrent.infoHash() + ".torrent");
+        });
+      }
+
+      torrent.createReadStream().on("error", function(err) {
+        res.status(500);
+        return next(err);
+      }).on("end", function() {
+        return res.redirect(204, "/" + torrent.infoHash() + ".torrent");
+      }).pipe(gs);
+    });
+  });
+});
+
+// download
+
+app.get("/:info_hash([a-f0-9]{40}).torrent", function(req, res, next) {
+  db.gridfs().open(req.param("info_hash"), "r", function(err, gs) {
+    if (err) {
+      res.status(500);
+      return next(err);
+    }
+
+    if (!gs.length) {
+      return gs.close(function() {
+        res.status(404);
+        return next(Error("torrent not found"));
+      });
+    }
+
+    res.type("application/x-bittorrent");
+
+    gs.pipe(res);
+  });
+});
+
+// talk to seaport, get a port to listen on
+
+ports.service([package.name, package.version].join("@"), function(port, ready) {
+  server.listen(port, function() {
+    winston.info("started successfully", {host: this.address().host, port: this.address().port});
+    ready();
+  });
+});
