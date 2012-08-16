@@ -1,6 +1,6 @@
 {
   "name": "jishaku-torrent-storage",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Torrent storage component of Jishaku Toshokan",
   "author": "Conrad Pankoff <deoxxa@fknsrs.biz> (http://www.fknsrs.biz/)",
   "license": "BSD",
